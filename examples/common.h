@@ -27,11 +27,6 @@
 #pragma once
 
 #include "densecrf.h"
-#include <opencv2/core.hpp>
-#include <opencv2/imgcodecs.hpp>
-#include <opencv2/highgui.hpp>
-
 VectorXs getLabeling( const unsigned char * im, int N, int M );
 unsigned char * colorize( const VectorXs & labeling, int W, int H );
-void print( const unsigned char * data, int nrows, int ncols );
 void print( VectorXs data, int nrows, int ncols );

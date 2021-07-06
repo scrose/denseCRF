@@ -32,14 +32,12 @@
 
 void writePGM ( const char* filename, int W, int H, const char* data )
 {
-
 	FILE* fp = fopen ( filename, "wb" );
 	if ( !fp )
 	{
 		printf ( "Failed to open file '%s'!\n", filename );
 		return;
 	}
-	printf ( "File loaded: '%s'!\n", filename );
 	fprintf ( fp, "P5\n%d %d\n%d\n", W, H, 255 );
 	fwrite ( data, 1, W*H, fp );
 	fclose ( fp );
@@ -66,16 +64,13 @@ unsigned char* readPPM ( const char* filename, int& W, int& H )
 		{
 			W=H=0;
 			fclose ( fp );
-			printf ( "[Stage 1] Failed to read file '%s'!\n", filename );
 			return NULL;
 		}
 	}
-	printf ( "OK.\n" );
 	if ( p != 'P' )
 	{
 		W=H=0;
 		fclose ( fp );
-		printf ( "[Stage 2] Failed to read file '%s'!\n", filename );
 		return NULL;
 	}
 	unsigned char * r = new unsigned char[W*H*3];
@@ -94,7 +89,6 @@ unsigned char* readPPM ( const char* filename, int& W, int& H )
 	{
 		W=H=0;
 		fclose ( fp );
-		printf ( "[Stage 3] Failed to read file '%s'!\n", filename );
 		return NULL;
 	}
 	fclose ( fp );

@@ -33,12 +33,6 @@
 #include <cstdlib>
 #include "ppm.h"
 #include "common.h"
-#include <opencv2/core.hpp>
-#include <opencv2/imgcodecs.hpp>
-#include <opencv2/highgui.hpp>
-#include <opencv2/imgproc.hpp>
-#include <cstring>
-
 
 // The energy object implements an energy function that is minimized using LBFGS
 class CRFEnergy: public EnergyFunction {
@@ -50,28 +44,19 @@ protected:
 	bool unary_, pairwise_, kernel_;
 	float l2_norm_;
 public:
-	CRFEnergy(
-			DenseCRF & crf,
-			const ObjectiveFunction & objective,
-			int NIT,
-			bool unary=1,
-			bool pairwise=1,
-			bool kernel=1 ):crf_(crf),objective_(objective),NIT_(NIT),unary_(unary),pairwise_(pairwise),kernel_(kernel),l2_norm_(0.f){
+	CRFEnergy( DenseCRF & crf, const ObjectiveFunction & objective, int NIT, bool unary=1, bool pairwise=1, bool kernel=1 ):crf_(crf),objective_(objective),NIT_(NIT),unary_(unary),pairwise_(pairwise),kernel_(kernel),l2_norm_(0.f){
 		initial_u_param_ = crf_.unaryParameters();
 		initial_lbl_param_ = crf_.labelCompatibilityParameters();
 		initial_knl_param_ = crf_.kernelParameters();
 	}
-
 	void setL2Norm( float norm ) {
 		l2_norm_ = norm;
 	}
-
 	virtual VectorXf initialValue() {
 		VectorXf p( unary_*initial_u_param_.rows() + pairwise_*initial_lbl_param_.rows() + kernel_*initial_knl_param_.rows() );
 		p << (unary_?initial_u_param_:VectorXf()), (pairwise_?initial_lbl_param_:VectorXf()), (kernel_?initial_knl_param_:VectorXf());
 		return p;
 	}
-
 	virtual double gradient( const VectorXf & x, VectorXf & dx ) {
 		int p = 0;
 		if (unary_) {
@@ -99,107 +84,54 @@ public:
 	}
 };
 
-
-
-// ======================================================
 int main( int argc, char* argv[]){
-
-    // Check arguments
 	if (argc<5){
-		printf("[Error: Too few arguments] Usage: %s image annotations output\n", argv[0] );
+		printf("Usage: %s image annotations output\n", argv[0] );
 		return 1;
 	}
 
-	// Number of classes (labels)
+	// get output path
+    std::string output_path = argv[3];
+
+	// Number of labels
 	const int M = atoi(argv[4]);
-
-	// Load the image
+	// Load the color image and some crude annotations (which are used in a simple classifier)
 	int W, H, GW, GH;
+	unsigned char * im = readPPM( argv[1], W, H );
 
-	std::string output_path = argv[3];
-    std::string image_path = argv[1];
-    cv::Mat img = imread(image_path, cv::IMREAD_COLOR);
-    // convert to RGB COLOR_BGR2RGB
-    cv::cvtColor(img, img, cv::COLOR_BGR2RGB);
-    W = img.cols;
-    H = img.rows;
+	std::cout << "Loaded image: " << argv[1] << std::endl;
+    std::cout << "\tDimensions: W:" << W << " H:" << H << std::endl;
 
-    std::cout << "N Classes: " << M << std::endl;
-    std::cout << "Image Path: " << image_path << std::endl;
-    std::cout << "Image WxH: " << W << " x " << H << std::endl;
+	if (!im){
+		printf("Failed to load image!\n");
+		return 1;
+	}
+	unsigned char * anno = readPPM( argv[2], GW, GH );
 
-    if(img.empty())
-    {
-        std::cout << "Could not read the image: " << image_path << std::endl;
-        return 1;
-    }
+    std::cout << "Loaded mask: " << argv[2] << std::endl;
+    std::cout << "\tDimensions: W:" << GW << " H:" << GH << std::endl;
+    std::cout << "\tClasses: W:" << argv[4] << std::endl;
 
-    // Save image as PPM format
-    std::cout << "Converting to PPM format ... ";
-    const std::string imageFilename = output_path + "hi-0039.ppm";
-    // declaring character array
-    char img_fname[imageFilename.length() + 1];
-    strcpy(img_fname, imageFilename.c_str());
-
-    // Write converted PPM data to file
-    writePPM ( img_fname, W, H, img.data );
-    std::cout << " done. " << std::endl;
-    // Read converted PPM image data
-    const unsigned char * img_ppm = readPPM( img_fname, W, H );
-    std::cout << "Converted PPM image loaded: " << img_fname << std::endl;
-
-
-	// Load mask image
-    std::string mask_path = argv[2];
-    cv::Mat mask = imread(mask_path, cv::IMREAD_COLOR);
-    // convert to RGB COLOR_BGR2RGB
-    cv::cvtColor(mask, mask, cv::COLOR_BGR2RGB);
-    if(mask.empty())
-    {
-        std::cout << "Could not read the annotation: " << mask_path << std::endl;
-        return 1;
-    }
-
-    GW = mask.cols;
-    GH = mask.rows;
-
-    std::cout << "\nMask Path: " << mask_path << std::endl;
-    std::cout << "Mask WxH: " << GW << " x " << GH << std::endl;
-
-    // Save image as PPM format
-    std::cout << "Converting to PPM format ... ";
-    const std::string maskFilename = output_path + "hi-0039_mask.ppm";
-    // declaring character array
-    char mask_fname[maskFilename.length() + 1];
-    strcpy(mask_fname, maskFilename.c_str());
-
-    // Write converted PPM data to file
-    writePPM ( mask_fname, GW, GH, mask.data );
-    std::cout << " done. " << std::endl;
-    // Read converted PPM image data
-    const unsigned char * mask_ppm = readPPM( mask_fname, GW, GH );
-    std::cout << "Converted PPM image loaded: " << mask_fname << std::endl;
-
+	if (!anno){
+		printf("Failed to load annotations!\n");
+		return 1;
+	}
 	if (W!=GW || H!=GH){
 		printf("Annotation size doesn't match image!\n");
 		return 1;
 	}
-
-	exit(0);
-
 	// Get the labeling
-	VectorXs labeling = getLabeling( mask_ppm, GW*GH, M );
-	print(labeling, GH, GW);
+	VectorXs labeling = getLabeling( anno, W*H, M );
 
 	const int N = W*H;
 	
 	// Get the logistic features (unary term)
 	// Here we just use the color as a feature
-	MatrixXf logistic_feature( 4, N ), logistic_transform( M, 4 );
+	MatrixXf logistic_feature( M, N ), logistic_transform( M, M );
 	logistic_feature.fill( 1.f );
-//	for( int i=0; i<N; i++ )
-//		for( int k=0; k<3; k++ )
-//			logistic_feature(k,i) = img[3*i+k] / 255.;
+	for( int i=0; i<N; i++ )
+		for( int k=0; k<3; k++ )
+			logistic_feature(k,i) = im[3*i+k] / 255.;
 	
 	for( int j=0; j<logistic_transform.cols(); j++ )
 		for( int i=0; i<logistic_transform.rows(); i++ )
@@ -207,17 +139,16 @@ int main( int argc, char* argv[]){
 	
 	// Setup the CRF model
 	DenseCRF2D crf(W, H, M);
-
-    std::cout << "CRF Created." << std::endl;
-
 	// Add a logistic unary term
 	crf.setUnaryEnergy( logistic_transform, logistic_feature );
 	
 	// Add simple pairwise potts terms
 	crf.addPairwiseGaussian( 3, 3, new PottsCompatibility( 1 ) );
-//	crf.addPairwiseGaussian( 3, 3, new DiagonalCompatibility( VectorXf(M) ) );
 	// Add a longer range label compatibility term
-	crf.addPairwiseBilateral( 80, 80, 13, 13, 13, img_ppm, new MatrixCompatibility( MatrixXf::Identity(M,M) ) );
+//	crf.addPairwiseBilateral( 80, 80, 13, 13, 13, im, new MatrixCompatibility( MatrixXf::Identity(M,M) ) );
+    VectorXf pairwise_vec(6);
+    pairwise_vec <<  1., 1., 1., 1., 1., 1.;
+    crf.addPairwiseBilateral( 80, 80, 13, 13, 13, im, new DiagonalCompatibility( pairwise_vec ) );
 	
 	// Choose your loss function
 // 	LogLikelihood objective( labeling, 0.01 ); // Log likelihood loss
@@ -225,6 +156,8 @@ int main( int argc, char* argv[]){
 // 	Hamming objective( labeling, 1.0 ); // Class average accuracy
 // 	Hamming objective( labeling, 0.2 ); // Hamming loss close to intersection over union
 	IntersectionOverUnion objective( labeling ); // Intersection over union accuracy
+
+    print( labeling, GH, GW );
 	
 	int NIT = 5;
 	const bool verbose = true;
@@ -240,14 +173,10 @@ int main( int argc, char* argv[]){
 	
 	for( int i=0; i<learning_params.rows(); i++ ) {
 
-        std::cout << "Learning Step: " << i << std::endl;
         // Return the parameters
         std::cout<<"Unary parameters: "<<crf.unaryParameters().transpose()<<std::endl;
         std::cout<<"Pairwise parameters: "<<crf.labelCompatibilityParameters().transpose()<<std::endl;
         std::cout<<"Kernel parameters: "<<crf.kernelParameters().transpose()<<std::endl;
-
-        // Show full matrix of parameters
-        //std::cout<<"Pairwise parameters: "<<crf.getLabelCompatibilityParameters().transpose()<<std::endl;
 
 		// Setup the energy
 		CRFEnergy energy( crf, objective, NIT, learning_params(i,0), learning_params(i,1), learning_params(i,2) );
@@ -269,39 +198,38 @@ int main( int argc, char* argv[]){
 		if( learning_params(i,2) )
 			crf.setKernelParameters( p.segment( id, crf.kernelParameters().rows() ) );
 
-        // Do map inference
-        VectorXs test_map = crf.map(NIT);
+		// Do map inference
+		VectorXs test_map = crf.map(NIT);
 
-        // Store the result
-        unsigned char *test_res = colorize( test_map, W, H );
-
+		// Store the result
         // Save test mask as PPM format
         std::cout << "Converting output to PPM format ... ";
-        const std::string testFilename = output_path + "test_" + std::to_string(i) + "_output.ppm";
+        const std::string testFilename = output_path + "t_" + std::to_string(i) + "_output.ppm";
         char test_fname[testFilename.length() + 1];
         strcpy(test_fname, testFilename.c_str());
-        writePPM( test_fname, W, H, test_res );
-	}
 
-    // Print the parameters
-    std::cout<<"Unary parameters: "<<crf.unaryParameters().transpose()<<std::endl;
-    std::cout<<"Pairwise parameters: "<<crf.labelCompatibilityParameters().transpose()<<std::endl;
-    std::cout<<"Kernel parameters: "<<crf.kernelParameters().transpose()<<std::endl;
+		unsigned char *test_res = colorize( test_map, W, H );
+		writePPM( test_fname, W, H, test_res );
+	}
+	// Return the parameters
+	std::cout<<"Unary parameters: "<<crf.unaryParameters().transpose()<<std::endl;
+	std::cout<<"Pairwise parameters: "<<crf.labelCompatibilityParameters().transpose()<<std::endl;
+	std::cout<<"Kernel parameters: "<<crf.kernelParameters().transpose()<<std::endl;
 	
 	// Do map inference
 	VectorXs map = crf.map(NIT);
 	
 	// Store the result
 	unsigned char *res = colorize( map, W, H );
-
-    // Save mask as PPM format
+    // Save test mask as PPM format
     std::cout << "Converting output to PPM format ... ";
-    const std::string outFilename = output_path + "_output.ppm";
-    char out_fname[outFilename.length() + 1];
-    strcpy(out_fname, outFilename.c_str());
-	writePPM( out_fname, W, H, res );
+    const std::string testFilename = output_path + "t_final_output.ppm";
+    char test_fname[testFilename.length() + 1];
+    strcpy(test_fname, testFilename.c_str());
+    unsigned char *test_res = colorize( map, W, H );
+    writePPM( test_fname, W, H, res );
 	
-//	delete[] im;
-//	delete[] anno;
-//	delete[] res;
+	delete[] im;
+	delete[] anno;
+	delete[] res;
 }

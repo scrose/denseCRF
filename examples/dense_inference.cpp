@@ -30,7 +30,6 @@
 #include "ppm.h"
 #include "common.h"
 
-
 // Certainty that the groundtruth is correct
 const float GT_PROB = 0.5;
 
